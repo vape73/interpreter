@@ -19,3 +19,4 @@ if __name__ == "__main__":
                 print(f"{var_name} = {result[var_name]}")
         except Exception as e:
             print(e)
+
