@@ -1,36 +1,61 @@
 import random
+from expressions import Expressions
 from source import Source
 from variables import Variables
-from expressions import Expressions
+from line_scanner import LineScanner
+from line_parser import LineParser
+
 
 class Interpreter:
-    MAX_STACK_LENGTH = 100
-
-    def __init__(self, variables: Variables, expressions: Expressions):
-        self.source = Source()
+    def __init__(self, source: Source, variables: Variables, expressions: Expressions):
+        self.source = source
         self.variables = variables
         self.expressions = expressions
-        self.stack = []
         self.running = True
 
     def execute_line(self, line):
-        # Разбор и выполнение команды в строке
-        pass
+        scanner = LineScanner(line)
+        parser = LineParser(scanner)
+        command = scanner.getStrings(
+            ["PRINT", "LET", "IF", "GOTO", "INPUT", "END", "CLEAR", "LIST", "LOAD", "SAVE", "GOSUB", "RETURN"])
 
-    def run(self, start_label=None):
-        # Запуск программы с опциональным начальным меткой
-        if start_label is not None:
-            if not self.source._find(start_label):
-                print("Label not found.")
-                return
+        if command == "LET":
+            var = parser.getVariable()
+            scanner.getChars("=")  # Assume single char '=' follows LET
+            expression = self.expressions.get_expression()
+            self.variables.set(var, expression)
+        elif command == "PRINT":
+            self.PRINT()
+        elif command == "IF":
+            condition = self.expressions.get_expression()  # Simplified condition handling
+            then_part = scanner.getStrings(["THEN"])
+            if then_part and condition:
+                self.execute_line(line[scanner.pos:])
+        elif command == "GOTO":
+            label = parser.getVariable()
+            self.GOTO(label)
+        elif command == "INPUT":
+            var_list = line[scanner.pos:].split(',')
+            self.INPUT(var_list)
+        elif command == "END":
+            self.END()
+        elif command == "CLEAR":
+            self.CLEAR()
+        elif command == "LIST":
+            self.LIST()
+        elif command == "LOAD":
+            filename = parser.getQuotedString()
+            self.LOAD(filename)
+        elif command == "SAVE":
+            filename = parser.getQuotedString()
+            self.SAVE(filename)
+        elif command == "GOSUB":
+            label = parser.getVariable()
+            self.GOSUB(label)
+        elif command == "RETURN":
+            self.RETURN()
         else:
-            self.source.gotoNext()
-
-        while self.running and not self.source.isEOL():
-            line = self.source.getCurrentLine()
-            self.execute_line(line)
-            if not self.source.gotoNext():
-                break
+            print(f"Unknown command or not implemented: {command}")
 
     def CLEAR(self):
         self.source.clear()
@@ -63,9 +88,28 @@ class Interpreter:
             value = input(f"{var.strip()}? ")
             self.variables.set(var.strip(), int(value))
 
-    def PRINT(self, expr_list):
-        # Реализуйте вывод согласно заданию
-        pass
+    def PRINT(self, args, parser: LineParser, scanner: LineScanner):
+        newline = True
+        while not scanner.isEOL():
+            ch = scanner.peekChar()
+            if ch == ',':
+                newline = False
+                print('\t', end='')
+                scanner.shift()
+            elif ch == ';':
+                newline = False
+                print(' ', end='')
+                scanner.shift()
+            elif string := parser.getQuotedString():
+                print(string, end='')
+                newline = True
+            else:  # arg is an expression
+                result = self.expressions.get_expression()
+                print(result, end='')
+                newline = True
+
+        if newline:
+            print()
 
     def LET(self, var, expression):
         # Реализуйте вычисление выражения и присваивание значения переменной

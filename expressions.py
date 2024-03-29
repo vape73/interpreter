@@ -9,7 +9,7 @@ class Expressions:
         self.scanner = None  # LineScanner или аналог для чтения выражений
 
     def set_scanner(self, scanner: LineScanner):
-        self.scanner = scanner
+        self.scanner: LineScanner = scanner
 
     def get_expression(self):
         """Разбор и вычисление выражения."""
@@ -32,10 +32,11 @@ class Expressions:
 
     def get_factor(self):
         """Разбор и вычисление фактора (число, переменная, выражение в скобках)."""
-        if self.scanner.peekChar().isdigit():
+        if self.scanner.testNumber():
             return int(self.scanner.getNumber())
         elif self.scanner.peekChar().isalpha():
-            var_name = self.scanner.getChar()
+            var_name = self.scanner.peekChar()
+            self.scanner.shift()
             return self.variables.get(var_name)
         elif self.scanner.getChar('('):
             value = self.get_expression()
@@ -62,3 +63,22 @@ class Expressions:
         """Вычисляет выражение и возвращает случайное число от 0 до этого значения."""
         expression_result = self.get_expression()
         return random.randint(0, max(0, expression_result - 1))
+
+
+if __name__ == "__main__":
+    variables = Variables()
+    variables.set('x', 10)
+    variables.set('y', 5)
+
+    scanner = LineScanner("3*x+2-y/(2+3)")
+    expressions = Expressions(variables)
+    expressions.set_scanner(scanner)
+
+    result = expressions.get_expression()
+    print(f"Result of '3*x+2-y/(2+3)': {result}")
+
+    # Testing RND function
+    scanner = LineScanner("10")
+    expressions.set_scanner(scanner)
+    random_result = expressions.RND()
+    print(f"Random number between 0 and 9: {random_result}")
