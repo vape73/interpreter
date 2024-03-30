@@ -1,61 +1,51 @@
 import os
+import time
 
 class Source:
     def __init__(self):
-        self.lines = []  # Список строк программы
-        self.lineIdx = -1  # Индекс текущей строки в списке
-        self.lineNo = None  # Номер (метка) текущей строки
+        self.lines = {}  # Словарь для хранения строк с ключами в виде номеров
+
+    def get_first_line_number(self):
+        # Возвращает номер первой строки программы
+        return min(self.lines.keys(), default=None)
+
+    def get_next_line_number(self, current_line_number):
+        # Возвращает номер следующей строки после текущей
+        line_numbers = sorted(self.lines.keys())
+        current_index = line_numbers.index(current_line_number)
+        if current_index < len(line_numbers) - 1:
+            # print(line_numbers[current_index + 1], self.lines[line_numbers[current_index + 1]])
+            return line_numbers[current_index + 1]
+        return None
+
+    def get_line(self, line_number):
+        # Возвращает строку по номеру
+        return self.lines.get(line_number, '')
+
+    def add_line(self, line_number, line):
+        # Добавляет строку в программу
+        self.lines[line_number] = line
 
     def clear(self):
         """Очищает текст программы."""
         self.lines.clear()
-        self.lineIdx = -1
-        self.lineNo = None
 
     def save(self, filename):
         """Сохраняет текст программы в файл."""
         with open(filename, 'w') as file:
-            for line in self.lines:
-                file.write(f"{line}\n")
+            for line_no in sorted(self.lines):
+                file.write(f"{line_no} {self.lines[line_no]}\n")
 
     def load(self, filename):
         """Загружает текст программы из файла."""
+        self.clear()
         if os.path.exists(filename):
             with open(filename, 'r') as file:
-                self.lines = file.readlines()
-            self.lines = [line.strip() for line in self.lines]  # Убираем переносы строк
+                for line in file:
+                    if line.strip():  # Проверяем, не пустая ли строка
+                        line_no, line_text = line.split(maxsplit=1)
+                        self.lines[int(line_no)] = line_text.strip()
 
-    def insert(self, newLine):
-        """Добавляет строку в программу с упорядочиванием по номерам меток."""
-        lineNo = int(newLine.split()[0])
-        for i, line in enumerate(self.lines):
-            currentLineNo = int(line.split()[0])
-            if currentLineNo == lineNo:
-                self.lines[i] = newLine
-                return
-            elif currentLineNo > lineNo:
-                self.lines.insert(i, newLine)
-                return
-        self.lines.append(newLine)
-
-    def _find(self, label):
-        """Находит строку по номеру метки."""
-        for idx, line in enumerate(self.lines):
-            if line.startswith(f"{label} "):
-                self.lineNo = label
-                self.lineIdx = idx
-                return True
-        return False
-
-    def _findNext(self):
-        """Находит следующую строку по метке."""
-        if self.lineIdx + 1 < len(self.lines):
-            nextLine = self.lines[self.lineIdx + 1]
-            self.lineNo = int(nextLine.split()[0])
-            self.lineIdx += 1
-            return True
-        return False
-
-    def gotoNext(self):
-        """Переходит к следующей строке программы."""
-        return self._findNext()
+    def find(self, label):
+        """Проверяет, существует ли метка в программе."""
+        return label in self.lines

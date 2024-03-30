@@ -130,8 +130,3 @@ class LineScanner:
                 self.pos += len(string)
                 return string
         return None
-
-
-scanner = LineScanner("100 REM Example")
-print(scanner.peekChar())
-print(scanner.testNumber())

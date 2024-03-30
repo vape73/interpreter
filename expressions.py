@@ -1,84 +1,126 @@
 import random
+from line_parser import LineParser
 from line_scanner import LineScanner
 from variables import Variables
 
-
 class Expressions:
     def __init__(self, variables: Variables):
-        self.variables = variables  # Словарь для хранения переменных и их значений
-        self.scanner = None  # LineScanner или аналог для чтения выражений
+        self.variables = variables
+        self.scanner = None
+        self.parser = None
 
     def set_scanner(self, scanner: LineScanner):
-        self.scanner: LineScanner = scanner
+        self.scanner = scanner
+        
+    def set_parser(self, parser: LineParser):
+        self.parser = parser
 
     def get_expression(self):
-        """Разбор и вычисление выражения."""
+        mul = 1
+        if self.scanner.peekChar() == '-':
+            self.scanner.shift()
+            mul = -mul
         result = self.get_term()
         while self.scanner.peekChar() in ('+', '-'):
-            if self.scanner.getChar('+'):
-                result += self.get_term()
-            elif self.scanner.getChar('-'):
-                result -= self.get_term()
-        return result
-
-    def get_unsignedexpr(self):
-        """Разбор и вычисление выражения без учета знака."""
-        if self.scanner.peekChar() == '+':
+            op = self.scanner.peekChar()
             self.scanner.shift()
-        elif self.scanner.peekChar() == '-':
-            self.scanner.shift()
-            return -self.get_term()
-        return self.get_term()
-
-    def get_factor(self):
-        """Разбор и вычисление фактора (число, переменная, выражение в скобках)."""
-        if self.scanner.testNumber():
-            return int(self.scanner.getNumber())
-        elif self.scanner.peekChar().isalpha():
-            var_name = self.scanner.peekChar()
-            self.scanner.shift()
-            return self.variables.get(var_name)
-        elif self.scanner.getChar('('):
-            value = self.get_expression()
-            if not self.scanner.getChar(')'):
-                raise Exception("Missing closing parenthesis")
-            return value
-        else:
-            raise Exception("Invalid expression")
+            if op:
+                if op == '+':
+                    result += self.get_term()
+                elif op == '-':
+                    result -= self.get_term()
+        return result * mul
 
     def get_term(self):
-        """Разбор и вычисление терма (умножение, деление)."""
         result = self.get_factor()
         while self.scanner.peekChar() in ('*', '/'):
-            if self.scanner.getChar('*'):
-                result *= self.get_factor()
-            elif self.scanner.getChar('/'):
-                divisor = self.get_factor()
-                if divisor == 0:
-                    raise Exception("Division by zero")
-                result //= divisor
+            op = self.scanner.peekChar()
+            self.scanner.shift()
+            if op:
+                if op == '*':
+                    result *= self.get_factor()
+                elif op == '/':
+                    divisor = self.get_factor()
+                    if divisor == 0:
+                        raise Exception("Division by zero")
+                    result //= divisor
         return result
 
-    def RND(self):
-        """Вычисляет выражение и возвращает случайное число от 0 до этого значения."""
-        expression_result = self.get_expression()
-        return random.randint(0, max(0, expression_result - 1))
+    def get_factor(self):
+        if self.scanner.peekChar() == '(':
+            self.scanner.shift()
+            result = self.get_expression()
+            if not self.scanner.getChar(')'):
+                raise Exception("Missing closing parenthesis")
+        elif self.scanner.testString("RND"):
+            result = self.handle_RND()
+        elif self.scanner.peekChar().isalpha():
+            var_name = self.parser.getVariable()
+            result = self.variables.get(var_name)
+        elif self.scanner.peekChar().isdigit():
+            result = self.scanner.getNumber()
+        else:
+            raise Exception("Invalid expression")
+        return result
 
+    def handle_RND(self):
+        self.scanner.shift(len("RND"))
+        if not self.scanner.getChar('('):
+            raise Exception("Expected '(' after RND")
+        max_value = self.get_expression()
+        if not self.scanner.getChar(')'):
+            raise Exception("Expected ')' after RND argument")
+        return random.randint(0, max(max_value - 1, 0))
+    
+    def get_logical_expression(self):
+        """Разбор и вычисление логического выражения."""
+        result = self.get_expression()
+        while True:
+            if self.scanner.testString("AND"):
+                self.scanner.shift(len("AND"))
+                operand = self.get_expression()
+                result = result and operand
+            elif self.scanner.testString("OR"):
+                self.scanner.shift(len("OR"))
+                operand = self.get_expression()
+                result = result or operand
+            elif self.scanner.testString("NOT"):
+                self.scanner.shift(len("NOT"))
+                result = not self.get_expression()
+            else:
+                break
+        return result
 
-if __name__ == "__main__":
-    variables = Variables()
-    variables.set('x', 10)
-    variables.set('y', 5)
-
-    scanner = LineScanner("3*x+2-y/(2+3)")
-    expressions = Expressions(variables)
-    expressions.set_scanner(scanner)
-
-    result = expressions.get_expression()
-    print(f"Result of '3*x+2-y/(2+3)': {result}")
-
-    # Testing RND function
-    scanner = LineScanner("10")
-    expressions.set_scanner(scanner)
-    random_result = expressions.RND()
-    print(f"Random number between 0 and 9: {random_result}")
+    def get_comparison(self):
+        """Разбор и вычисление сравнений."""
+        left = self.get_expression()
+        while True:
+            if self.scanner.peekChar() in ('<', '>', '='):
+                op = self.scanner.peekChar()
+                self.scanner.shift()
+                if op == '<':
+                    if self.scanner.peekChar() == '>':
+                        self.scanner.shift()
+                        right = self.get_expression()
+                        return left != right
+                    elif self.scanner.peekChar() == '=':
+                        self.scanner.shift()
+                        right = self.get_expression()
+                        return left <= right
+                    else:
+                        right = self.get_expression()
+                        return left < right
+                elif op == '>':
+                    if self.scanner.peekChar() == '=':
+                        self.scanner.shift()
+                        right = self.get_expression()
+                        return left >= right
+                    else:
+                        right = self.get_expression()
+                        return left > right
+                elif op == '=':
+                    right = self.get_expression()
+                    return left == right
+            else:
+                break
+        return left

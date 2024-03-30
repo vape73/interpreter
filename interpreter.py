@@ -4,65 +4,74 @@ from source import Source
 from variables import Variables
 from line_scanner import LineScanner
 from line_parser import LineParser
+import time
 
+commands = ["PRINT", "LET", "IF", "GOTO", "INPUT", "END", "CLEAR", "LIST", "LOAD", "SAVE", "GOSUB", "RETURN", "INPUT", "REM"]
 
 class Interpreter:
+    MAX_STACK_LENGTH = 100
+        
     def __init__(self, source: Source, variables: Variables, expressions: Expressions):
+        self.stack = []
         self.source = source
         self.variables = variables
         self.expressions = expressions
         self.running = True
+        self.current_line_number = None
 
     def execute_line(self, line):
-        scanner = LineScanner(line)
-        parser = LineParser(scanner)
-        command = scanner.getStrings(
-            ["PRINT", "LET", "IF", "GOTO", "INPUT", "END", "CLEAR", "LIST", "LOAD", "SAVE", "GOSUB", "RETURN"])
-
-        if command == "LET":
-            var = parser.getVariable()
-            scanner.getChars("=")  # Assume single char '=' follows LET
-            expression = self.expressions.get_expression()
-            self.variables.set(var, expression)
-        elif command == "PRINT":
-            self.PRINT()
-        elif command == "IF":
-            condition = self.expressions.get_expression()  # Simplified condition handling
-            then_part = scanner.getStrings(["THEN"])
-            if then_part and condition:
-                self.execute_line(line[scanner.pos:])
-        elif command == "GOTO":
-            label = parser.getVariable()
-            self.GOTO(label)
-        elif command == "INPUT":
-            var_list = line[scanner.pos:].split(',')
-            self.INPUT(var_list)
-        elif command == "END":
-            self.END()
-        elif command == "CLEAR":
-            self.CLEAR()
-        elif command == "LIST":
-            self.LIST()
-        elif command == "LOAD":
-            filename = parser.getQuotedString()
-            self.LOAD(filename)
-        elif command == "SAVE":
-            filename = parser.getQuotedString()
-            self.SAVE(filename)
-        elif command == "GOSUB":
-            label = parser.getVariable()
-            self.GOSUB(label)
-        elif command == "RETURN":
-            self.RETURN()
-        else:
-            print(f"Unknown command or not implemented: {command}")
+        try:
+            scanner = LineScanner(line)
+            parser = LineParser(scanner)
+            self.expressions.set_scanner(scanner)
+            self.expressions.set_parser(parser)
+            command = scanner.getStrings(commands)
+            
+            scanner.getSpaces()
+            if command == "LET":
+                var = parser.getVariable()
+                scanner.getChars("=")
+                expression = self.expressions.get_expression()
+                self.variables.set(var, expression)
+            elif command == "PRINT":
+                self.PRINT(parser, scanner)
+            elif command == "IF":
+                self.IF(scanner)
+            elif command == "INPUT":
+                self.INPUT(scanner, parser)
+            elif command == "END":
+                self.END()
+            elif command == "CLEAR":
+                self.CLEAR()
+            elif command == "LIST":
+                self.LIST()
+            elif command == "LOAD":
+                filename = parser.getQuotedString()
+                self.LOAD(filename)
+            elif command == "SAVE":
+                filename = parser.getQuotedString()
+                self.SAVE(filename)
+            elif command == "GOTO":
+                label = scanner.getNumber()
+                self.GOTO(label)
+            elif command == "GOSUB":
+                label = scanner.getNumber()
+                self.GOSUB(label)
+            elif command == "RETURN":
+                self.RETURN()
+            elif command == "REM":
+                self.REM()
+            else:
+                print(f"Unknown command or not implemented: {command}")
+        except Exception as  e:
+            print(f'ОШИБКА: {e} - {scanner.line} position: {scanner.pos}',)
+            self.running = False
 
     def CLEAR(self):
         self.source.clear()
         self.variables.reset()
 
     def REM(self):
-        # Этот оператор просто игнорирует все до конца строки
         pass
 
     def LIST(self):
@@ -75,20 +84,24 @@ class Interpreter:
     def SAVE(self, filename):
         self.source.save(filename)
 
-    def GOTO(self, label):
-        if not self.source._find(label):
-            print(f"Label {label} not found.")
-            self.running = False
-
     def END(self):
         self.running = False
 
-    def INPUT(self, var_list):
-        for var in var_list.split(","):
-            value = input(f"{var.strip()}? ")
-            self.variables.set(var.strip(), int(value))
+    def INPUT(self, scanner, parser):
+        while not scanner.isEOL():
+            scanner.getSpaces()
+            var_name = parser.getVariable()
+            if var_name:
+                try:
+                    value = input(f"{var_name}? ")
+                    self.variables.set(var_name, int(value))
+                except ValueError:
+                    print(f"Ошибка: введённое значение для переменной '{var_name}' не является числом.")
+                    return
+            if scanner.peekChar() == ',':
+                scanner.shift()
 
-    def PRINT(self, args, parser: LineParser, scanner: LineScanner):
+    def PRINT(self, parser: LineParser, scanner: LineScanner):
         newline = True
         while not scanner.isEOL():
             ch = scanner.peekChar()
@@ -103,7 +116,7 @@ class Interpreter:
             elif string := parser.getQuotedString():
                 print(string, end='')
                 newline = True
-            else:  # arg is an expression
+            else:
                 result = self.expressions.get_expression()
                 print(result, end='')
                 newline = True
@@ -111,33 +124,42 @@ class Interpreter:
         if newline:
             print()
 
-    def LET(self, var, expression):
-        # Реализуйте вычисление выражения и присваивание значения переменной
-        pass
+    def IF(self, scanner):
+        condition = self.expressions.get_comparison()
+        scanner.shift()
+        then_part = scanner.getString("THEN")
+        if then_part and condition:
+            rest_of_line = scanner.line[scanner.pos:].strip()
+            self.execute_line(rest_of_line)
 
-    def IF(self, condition):
-        # Реализуйте условное выполнение
-        pass
+    def GOTO(self, label):
+        if label in self.source.lines:
+            self.current_line_number = label
+            current_line = self.source.get_line(self.current_line_number).strip()
+            self.execute_line(current_line)
+        else:
+            raise Exception(f"Метка {label} не найдена")
 
     def GOSUB(self, label):
         if len(self.stack) < self.MAX_STACK_LENGTH:
-            self.stack.append((self.source.lineNo, self.source.lineIdx))
+            self.stack.append(self.current_line_number)
             self.GOTO(label)
         else:
-            print("Stack overflow.")
-            self.running = False
+            raise Exception('Переполнение стека')
 
     def RETURN(self):
         if self.stack:
-            lineNo, lineIdx = self.stack.pop()
-            self.source.lineNo = lineNo
-            self.source.lineIdx = lineIdx
-            self.source.gotoNext()
+            self.current_line_number = self.stack.pop()
         else:
-            print("Return without GOSUB.")
-            self.running = False
+            raise Exception('Возврат без GOSUB')
+    
+    def run(self):
+        self.running = True
+        self.current_line_number = self.source.get_first_line_number()
 
-    def RND(self):
-        """Вычисляет выражение и возвращает случайное число от 0 до этого значения."""
-        expression_result = self.expressions.get_expression()
-        return random.randint(0, max(0, expression_result - 1))
+        while self.running and self.current_line_number is not None:
+            current_line = self.source.get_line(self.current_line_number).strip()
+            self.execute_line(current_line)
+            
+            if self.running:
+                self.current_line_number = self.source.get_next_line_number(self.current_line_number)
