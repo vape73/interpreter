@@ -1,12 +1,13 @@
 import random
 from expressions import Expressions
+from for_loop_context import ForLoopContext
 from source import Source
 from variables import Variables
 from line_scanner import LineScanner
 from line_parser import LineParser
 import time
 
-commands = ["PRINT", "LET", "IF", "GOTO", "INPUT", "END", "CLEAR", "LIST", "LOAD", "SAVE", "GOSUB", "RETURN", "INPUT", "REM"]
+commands = ["PRINT", "LET", "IF", "GOTO", "INPUT", "END", "CLEAR", "LIST", "LOAD", "SAVE", "GOSUB", "RETURN", "INPUT", "REM", "FOR", "NEXT"]
 
 class Interpreter:
     MAX_STACK_LENGTH = 100
@@ -18,6 +19,7 @@ class Interpreter:
         self.expressions = expressions
         self.running = True
         self.current_line_number = None
+        self.for_loops_stack = []
 
     def execute_line(self, line):
         try:
@@ -61,11 +63,16 @@ class Interpreter:
                 self.RETURN()
             elif command == "REM":
                 self.REM()
+            elif command == "FOR":
+                self.FOR(parser, scanner)
+            elif command == "NEXT":
+                self.NEXT()
             else:
                 print(f"Unknown command or not implemented: {command}")
         except Exception as  e:
-            print(f'ОШИБКА: {e} - {scanner.line} position: {scanner.pos}',)
-            self.running = False
+            # print(f'ОШИБКА: {e} - {scanner.line} position: {scanner.pos}',)
+            # self.running = False
+            raise e
 
     def CLEAR(self):
         self.source.clear()
@@ -124,13 +131,24 @@ class Interpreter:
         if newline:
             print()
 
-    def IF(self, scanner):
+    def IF(self, scanner: LineScanner):
         condition = self.expressions.get_comparison()
-        scanner.shift()
+        scanner.getSpaces()
         then_part = scanner.getString("THEN")
-        if then_part and condition:
+        if then_part:
             rest_of_line = scanner.line[scanner.pos:].strip()
-            self.execute_line(rest_of_line)
+            else_index = rest_of_line.upper().find("ELSE")
+            # print('else_index: ', else_index, rest_of_line)
+            if condition:
+                # Если условие истинно, выполняем код после THEN
+                
+                # print(rest_of_line[:else_index].strip())
+                self.execute_line(rest_of_line[:else_index].strip())
+            else:
+                # Иначе ищем ELSE в строке и выполняем код после него
+                if else_index != -1:
+                    rest_of_line = rest_of_line[else_index + len("ELSE")+1:].strip()
+                    self.execute_line(rest_of_line)
 
     def GOTO(self, label):
         if label in self.source.lines.keys():
@@ -152,6 +170,35 @@ class Interpreter:
             self.current_line_number = self.stack.pop()
         else:
             raise Exception('Возврат без GOSUB')
+        
+    def FOR(self, parser: LineParser, scanner: LineScanner):
+        var = parser.getVariable()
+        scanner.getChar('=')
+        start = self.expressions.get_expression()
+        scanner.getSpaces()
+        if not scanner.getString("TO"):
+            raise ValueError("Ожидается TO после начального значения цикла FOR")
+        scanner.getSpaces()
+        end = self.expressions.get_expression()
+        scanner.getSpaces()
+        step = 1  # Значение по умолчанию для шага
+        if scanner.getString("STEP"):
+            scanner.getSpaces()
+            step = self.expressions.get_expression()
+        self.variables.set(var, start)
+        self.for_loops_stack.append(ForLoopContext(var, start, end, step, self.current_line_number))
+
+    def NEXT(self):
+        if not self.for_loops_stack:
+            raise Exception("Нет активного цикла FOR для NEXT")
+        context = self.for_loops_stack[-1]
+        current_value = self.variables.get(context.var) + context.step
+        # Проверяем, не вышли ли мы за пределы цикла
+        if (context.step > 0 and current_value > context.end) or (context.step < 0 and current_value < context.end):
+            self.for_loops_stack.pop()  # Выходим из цикла, удаляя контекст
+        else:
+            self.variables.set(context.var, current_value)
+            self.current_line_number = context.line_number  # Возвращаемся к началу цикла
     
     def run(self, start_from=None):
         self.running = True
