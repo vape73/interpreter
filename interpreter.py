@@ -75,8 +75,8 @@ class Interpreter:
         pass
 
     def LIST(self):
-        for line in self.source.lines:
-            print(line)
+        for num, line in self.source.lines.items():
+            print(num, line)
 
     def LOAD(self, filename):
         self.source.load(filename)
@@ -133,7 +133,7 @@ class Interpreter:
             self.execute_line(rest_of_line)
 
     def GOTO(self, label):
-        if label in self.source.lines:
+        if label in self.source.lines.keys():
             self.current_line_number = label
             current_line = self.source.get_line(self.current_line_number).strip()
             self.execute_line(current_line)
@@ -153,9 +153,10 @@ class Interpreter:
         else:
             raise Exception('Возврат без GOSUB')
     
-    def run(self):
+    def run(self, start_from=None):
         self.running = True
-        self.current_line_number = self.source.get_first_line_number()
+
+        self.current_line_number = self.source.get_first_line_number() if not start_from else start_from
 
         while self.running and self.current_line_number is not None:
             current_line = self.source.get_line(self.current_line_number).strip()
