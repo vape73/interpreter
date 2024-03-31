@@ -70,9 +70,8 @@ class Interpreter:
             else:
                 print(f"Unknown command or not implemented: {command}")
         except Exception as  e:
-            # print(f'ОШИБКА: {e} - {scanner.line} position: {scanner.pos}',)
-            # self.running = False
-            raise e
+            print(f'ОШИБКА: {e} - {scanner.line} position: {scanner.pos}',)
+            self.running = False
 
     def CLEAR(self):
         self.source.clear()
@@ -138,16 +137,12 @@ class Interpreter:
         if then_part:
             rest_of_line = scanner.line[scanner.pos:].strip()
             else_index = rest_of_line.upper().find("ELSE")
-            # print('else_index: ', else_index, rest_of_line)
             if condition:
-                # Если условие истинно, выполняем код после THEN
-                
                 if else_index != -1:
                     self.execute_line(rest_of_line[:else_index].strip())
                 else:
                     self.execute_line(rest_of_line.strip())
             else:
-                # Иначе ищем ELSE в строке и выполняем код после него
                 if else_index != -1:
                     rest_of_line = rest_of_line[else_index + len("ELSE")+1:].strip()
                     self.execute_line(rest_of_line)
@@ -183,7 +178,7 @@ class Interpreter:
         scanner.getSpaces()
         end = self.expressions.get_expression()
         scanner.getSpaces()
-        step = 1  # Значение по умолчанию для шага
+        step = 1
         if scanner.getString("STEP"):
             scanner.getSpaces()
             step = self.expressions.get_expression()
@@ -195,12 +190,11 @@ class Interpreter:
             raise Exception("Нет активного цикла FOR для NEXT")
         context = self.for_loops_stack[-1]
         current_value = self.variables.get(context.var) + context.step
-        # Проверяем, не вышли ли мы за пределы цикла
         if (context.step > 0 and current_value > context.end) or (context.step < 0 and current_value < context.end):
-            self.for_loops_stack.pop()  # Выходим из цикла, удаляя контекст
+            self.for_loops_stack.pop() 
         else:
             self.variables.set(context.var, current_value)
-            self.current_line_number = context.line_number  # Возвращаемся к началу цикла
+            self.current_line_number = context.line_number 
     
     def run(self, start_from=None):
         self.running = True

@@ -16,12 +16,12 @@ class LineScanner:
         if self.pos < len(self.line):
             return self.line[self.pos]
         else:
-            return None  # Или можно выбросить исключение, если требуется строгая обработка ошибок
+            return None
 
     def testChar(self, ch):
         """Сравнивает текущий символ с заданным."""
         if self.isEOL():
-            return False  # Или возвращаем None, если считаем это исключительной ситуацией
+            return False  
         return self.line[self.pos] == ch
 
     def testSpace(self):
@@ -33,7 +33,7 @@ class LineScanner:
     def testCharNot(self, ch):
         """Проверяет, не равен ли текущий символ заданному."""
         if self.isEOL():
-            return False  # Или None, смотря как вы хотите обрабатывать выход за пределы
+            return False 
         return self.line[self.pos] != ch
 
     def testChars(self, chars):
