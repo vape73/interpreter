@@ -142,8 +142,10 @@ class Interpreter:
             if condition:
                 # Если условие истинно, выполняем код после THEN
                 
-                # print(rest_of_line[:else_index].strip())
-                self.execute_line(rest_of_line[:else_index].strip())
+                if else_index != -1:
+                    self.execute_line(rest_of_line[:else_index].strip())
+                else:
+                    self.execute_line(rest_of_line.strip())
             else:
                 # Иначе ищем ELSE в строке и выполняем код после него
                 if else_index != -1:
